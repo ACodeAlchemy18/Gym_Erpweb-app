@@ -32,10 +32,13 @@ export default function OnboardingPage() {
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const steps = getOnboardingSteps(user.role);
-  const totalSteps = getTotalSteps(user.role);
-  const currentStepData = steps[currentStep];
-  const progress = ((currentStep + 1) / totalSteps) * 100;
+const role = user?.role;
+
+const steps = role ? getOnboardingSteps(role) : [];
+const totalSteps = role ? getTotalSteps(role) : 1;
+
+const currentStepData = steps[currentStep];
+const progress = ((currentStep + 1) / totalSteps) * 100;
 
   if (!isAuthenticated || !user) {
     return (
