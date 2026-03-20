@@ -25,7 +25,7 @@ export function GoogleGymMap({ gym }: GoogleGymMapProps) {
     // Load Google Maps API dynamically
     if (!window.google) {
       const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyBJOXrWvjbxS-oCOjwL0Jx_0gHD5VH6SiE&libraries=maps`;
+     
       script.async = true;
       script.defer = true;
       script.onload = initializeMap;
