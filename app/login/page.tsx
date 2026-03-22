@@ -132,7 +132,11 @@ export default function LoginPage() {
                 className="bg-secondary border-border"
               />
             </div>
-
+<div className="text-right text-sm">
+  <Link href="/forgot-password" className="text-primary hover:underline">
+    Forgot Password?
+  </Link>
+</div>
             {/* Submit */}
             <Button
               type="submit"

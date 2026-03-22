@@ -20,8 +20,40 @@ interface OnboardingContextType {
 
 const OnboardingContext = createContext<OnboardingContextType | undefined>(undefined);
 
+// Fields that hold large base64 image data — strip these before saving to localStorage
+// but keep them alive in React state (in-memory only).
+const IMAGE_FIELDS = ['avatar', 'profilePhoto', 'image'];
+
+function stripImages(data: Record<string, any>): Record<string, any> {
+  const stripped = { ...data };
+  IMAGE_FIELDS.forEach(key => {
+    if (stripped[key] && typeof stripped[key] === 'string' && stripped[key].startsWith('data:')) {
+      delete stripped[key];
+    }
+  });
+  return stripped;
+}
+
+function safeSave(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch (e: any) {
+    if (e?.name === 'QuotaExceededError' || e?.code === 22) {
+      // Last resort: clear old onboarding data and retry once
+      try {
+        localStorage.removeItem(key);
+        localStorage.setItem(key, value);
+      } catch {
+        // Still failing — silently ignore, data lives in React state
+        console.warn('localStorage quota exceeded — onboarding data kept in memory only.');
+      }
+    }
+  }
+}
+
 export function OnboardingProvider({ children }: { children: React.ReactNode }) {
   const [onboardingData, setOnboardingData] = useState<OnboardingData | null>(null);
+  // allOnboardingData holds the FULL data including images (in memory)
   const [allOnboardingData, setAllOnboardingData] = useState<Record<string, OnboardingData>>({});
 
   useEffect(() => {
@@ -31,25 +63,36 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         const parsed = JSON.parse(savedData);
         setAllOnboardingData(parsed);
       } catch (error) {
-        console.error('[v0] Failed to parse onboarding data:', error);
+        console.error('Failed to parse onboarding data:', error);
       }
     }
   }, []);
 
   const saveOnboardingData = (userId: string, role: UserRole, data: Record<string, any>) => {
-    const newData = {
+    const newData: OnboardingData = {
       userId,
       role,
       completed: false,
-      data,
+      data, // full data with images — lives in memory
     };
+
     const updated = {
       ...allOnboardingData,
       [userId]: newData,
     };
+
     setAllOnboardingData(updated);
     setOnboardingData(newData);
-    localStorage.setItem('onboarding_data', JSON.stringify(updated));
+
+    // Persist to localStorage but WITHOUT image data (too large)
+    const updatedForStorage: Record<string, OnboardingData> = {};
+    Object.entries(updated).forEach(([uid, record]) => {
+      updatedForStorage[uid] = {
+        ...record,
+        data: stripImages(record.data),
+      };
+    });
+    safeSave('onboarding_data', JSON.stringify(updatedForStorage));
   };
 
   const getOnboardingData = (userId: string) => {
@@ -59,7 +102,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   const completeOnboarding = (userId: string) => {
     const data = allOnboardingData[userId];
     if (data) {
-      const completed = {
+      const completed: OnboardingData = {
         ...data,
         completed: true,
       };
@@ -69,7 +112,15 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       };
       setAllOnboardingData(updated);
       setOnboardingData(completed);
-      localStorage.setItem('onboarding_data', JSON.stringify(updated));
+
+      const updatedForStorage: Record<string, OnboardingData> = {};
+      Object.entries(updated).forEach(([uid, record]) => {
+        updatedForStorage[uid] = {
+          ...record,
+          data: stripImages(record.data),
+        };
+      });
+      safeSave('onboarding_data', JSON.stringify(updatedForStorage));
     }
   };
 

@@ -249,7 +249,11 @@ export default function SignupPage() {
                 </button>
               </div>
             </div>
-
+<div className="text-right text-sm">
+  <Link href="/forgot-password" className="text-primary hover:underline">
+    Forgot Password?
+  </Link>
+</div>
             {/* Confirm Password */}
             <div>
               <Label htmlFor="confirmPassword" className="text-sm font-medium mb-2 block">
