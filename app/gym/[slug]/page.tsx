@@ -211,7 +211,7 @@ const trainers = getTrainersByGymId(gym.id);
 {/* Trainer Section */}
 <div className="mt-10">
   <h2 className="text-2xl font-bold mb-4">Choose Your Trainer</h2>
-  <GymTrainers trainers={trainers} />
+  <GymTrainers trainers={trainers.map(t => ({ ...t, gymId: gym.id }))} gymId={gym.id} gymSlug={gym.slug} />
 </div>
 
 
