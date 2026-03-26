@@ -1,448 +1,293 @@
 'use client';
 
-import { useAuth } from '@/contexts/auth-context';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState, useCallback } from 'react';
+import { useParams } from 'next/navigation';
+import { useState } from 'react';
+import Link from 'next/link';
 import { Header } from '@/components/header';
-import { Card } from '@/components/ui/card';
+import { useUser } from '@/contexts/user-context';
+import { useAuth } from '@/contexts/auth-context';
+import { getGymBySlug } from '@/data/gyms';
+import { getTrainersByGymId } from '@/data/trainer-gyms';
+import { getRegisteredTrainerById } from '@/data/trainer-registry';
+import { addBooking, PLAN_META, type BookingPlan } from '@/data/trainer-booking-store';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import Link from 'next/link';
-import {
-  ArrowLeft, Award, Star, Users, Trash2, Mail, Phone,
-  Eye, UserCheck, UserPlus, Clock, DollarSign,
-  Building2, Search, X, IdCard, CheckCircle2, AlertCircle,
+  ArrowLeft, Star, Award, Clock, DollarSign, Mail, Phone,
+  MapPin, CheckCircle2, AlertCircle, Calendar, Zap, IdCard, Lock,
 } from 'lucide-react';
-import { getOwnerGyms } from '@/data/owner-gyms';
-import {
-  associateTrainerWithGym,
-  removeTrainerFromGym,
-  getActiveTrainerIdsForGym,
-} from '@/data/trainer-gyms';
-import {
-  getAllRegisteredTrainers,
-  getAvailableTrainersForGym,
-  getTrainerByPublicId,
-  searchTrainers,
-  type RegisteredTrainer,
-} from '@/data/trainer-registry';
 
-const DUMMY_GYM = { id: 'demo_gym_1', name: 'My Gym (Demo)', city: 'Mumbai' };
+export default function TrainerProfilePage() {
+  const params = useParams();
+  const slug = params.slug as string;
+  const trainerId = params.trainerId as string;
+  const { subscriptions } = useUser();
+  const { user, isAuthenticated } = useAuth();
 
-export default function OwnersTrainersPage() {
-  const { isAuthenticated, user } = useAuth();
-  const router = useRouter();
+  const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<BookingPlan | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [bookingResult, setBookingResult] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const [gyms, setGyms] = useState<any[]>([]);
-  const [selectedGym, setSelectedGym] = useState<string>('');
-  const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
-  const [trainerToRemove, setTrainerToRemove] = useState<string | null>(null);
-  const [viewTrainer, setViewTrainer] = useState<RegisteredTrainer | null>(null);
-  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
-  const [assignedIds, setAssignedIds] = useState<string[]>([]);
-
-  // Search state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [idSearchQuery, setIdSearchQuery] = useState('');
-  const [idSearchResult, setIdSearchResult] = useState<RegisteredTrainer | null | 'not_found'>(null);
-  const [addSuccessMsg, setAddSuccessMsg] = useState('');
-
-  const refreshAssigned = useCallback((gymId: string) => {
-    setAssignedIds(getActiveTrainerIdsForGym(gymId));
-  }, []);
-
-  useEffect(() => {
-    if (!isAuthenticated || user?.role !== 'owner') { router.push('/login'); return; }
-    const ownerGyms = getOwnerGyms(user.id);
-    const allGyms = ownerGyms.length > 0 ? ownerGyms : [DUMMY_GYM];
-    setGyms(allGyms);
-    setSelectedGym(allGyms[0].id);
-    refreshAssigned(allGyms[0].id);
-  }, [isAuthenticated, user, router, refreshAssigned]);
-
-  useEffect(() => {
-    if (selectedGym) refreshAssigned(selectedGym);
-  }, [selectedGym, refreshAssigned]);
-
-  const currentGym = gyms.find(g => g.id === selectedGym);
-  const allTrainers = getAllRegisteredTrainers();
-  const addedTrainers = allTrainers.filter(t => assignedIds.includes(t.id));
-
-  // Filter available trainers by search query
-  const filteredAvailable = searchQuery.trim()
-    ? searchTrainers(searchQuery).filter(t => !assignedIds.includes(t.id))
-    : getAvailableTrainersForGym(assignedIds);
-
-  const handleAddTrainer = (trainerId: string, trainerName?: string) => {
-    if (!selectedGym) return;
-    associateTrainerWithGym(trainerId, selectedGym);
-    refreshAssigned(selectedGym);
-    if (trainerName) {
-      setAddSuccessMsg(`${trainerName} added to ${currentGym?.name}!`);
-      setTimeout(() => setAddSuccessMsg(''), 3000);
-    }
-  };
-
-  const handleRemoveConfirm = () => {
-    if (!trainerToRemove || !selectedGym) return;
-    removeTrainerFromGym(trainerToRemove, selectedGym);
-    refreshAssigned(selectedGym);
-    setTrainerToRemove(null);
-    setRemoveDialogOpen(false);
-  };
-
-  // Search trainer by their public Trainer ID (e.g. TRN-001)
-  const handleIdSearch = () => {
-    if (!idSearchQuery.trim()) return;
-    const found = getTrainerByPublicId(idSearchQuery.trim());
-    setIdSearchResult(found ?? 'not_found');
-  };
-
-  const handleAddFromIdSearch = () => {
-    if (!idSearchResult || idSearchResult === 'not_found') return;
-    handleAddTrainer(idSearchResult.id, idSearchResult.name);
-    setIdSearchQuery('');
-    setIdSearchResult(null);
-  };
-
-  if (!isAuthenticated || user?.role !== 'owner') return null;
-
-  const TrainerCard = ({ trainer, isAdded }: { trainer: RegisteredTrainer; isAdded: boolean }) => (
-    <Card className="bg-card border-border/50 p-5 flex flex-col gap-4 hover:border-primary/40 transition-all">
-      <div className="flex items-start gap-4">
-        <img src={trainer.avatar || '/placeholder-user.jpg'} alt={trainer.name} className="h-16 w-16 rounded-xl object-cover border border-border" />
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-foreground text-base">{trainer.name}</h3>
-          <Badge className="mt-1 bg-primary/20 text-primary text-xs">{trainer.specialization}</Badge>
-          {/* Trainer ID badge */}
-          <div className="flex items-center gap-1 mt-1.5">
-            <IdCard className="h-3 w-3 text-muted-foreground" />
-            <span className="text-xs font-mono text-muted-foreground">{trainer.trainerId}</span>
-          </div>
-        </div>
-        {isAdded && (
-          <Badge variant="outline" className="text-green-500 border-green-500/50 text-xs shrink-0 flex items-center gap-1">
-            <UserCheck className="h-3 w-3" />Added
-          </Badge>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 text-sm">
-        <div className="flex items-center gap-1.5 text-muted-foreground"><Star className="h-3.5 w-3.5 text-yellow-400 fill-yellow-400" /><span>{trainer.rating} rating</span></div>
-        <div className="flex items-center gap-1.5 text-muted-foreground"><Award className="h-3.5 w-3.5 text-primary" /><span>{trainer.yearsExperience} yrs exp</span></div>
-        <div className="flex items-center gap-1.5 text-muted-foreground"><DollarSign className="h-3.5 w-3.5 text-green-500" /><span>₹{trainer.hourlyRate}/hr</span></div>
-        <div className="flex items-center gap-1.5 text-muted-foreground"><Clock className="h-3.5 w-3.5 text-primary" /><span className="truncate">{trainer.city}</span></div>
-        <div className="flex items-center gap-1.5 text-muted-foreground col-span-2"><Mail className="h-3.5 w-3.5" /><span className="truncate text-xs">{trainer.email}</span></div>
-      </div>
-
-      <div className="flex gap-2 pt-1 border-t border-border/50">
-        <Button variant="outline" size="sm" className="flex-1 border-border bg-transparent gap-1.5 text-xs" onClick={() => { setViewTrainer(trainer); setProfileDialogOpen(true); }}>
-          <Eye className="h-3.5 w-3.5" />View Profile
-        </Button>
-        {isAdded ? (
-          <Button variant="outline" size="sm" className="flex-1 border-destructive/50 text-destructive hover:bg-destructive/10 gap-1.5 text-xs"
-            onClick={() => { setTrainerToRemove(trainer.id); setRemoveDialogOpen(true); }}>
-            <Trash2 className="h-3.5 w-3.5" />Remove
-          </Button>
-        ) : (
-          <Button size="sm" className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5 text-xs"
-            onClick={() => handleAddTrainer(trainer.id, trainer.name)}>
-            <UserPlus className="h-3.5 w-3.5" />Add to Gym
-          </Button>
-        )}
-      </div>
-    </Card>
+  const gym = getGymBySlug(slug);
+  if (!gym) return (
+    <div className="min-h-screen bg-background"><Header />
+      <div className="flex items-center justify-center h-96"><p className="text-muted-foreground">Gym not found.</p></div>
+    </div>
   );
+
+  const richTrainer = getRegisteredTrainerById(trainerId);
+  const basicTrainer = getTrainersByGymId(gym.id).find(t => t.id === trainerId);
+  const trainer = richTrainer || basicTrainer;
+
+  if (!trainer) return (
+    <div className="min-h-screen bg-background"><Header />
+      <div className="flex items-center justify-center h-96"><p className="text-muted-foreground">Trainer not found.</p></div>
+    </div>
+  );
+
+  const hasActiveSubscription = isAuthenticated && subscriptions.some(
+    s => s.gymId === gym.id && (s.status === 'active' || s.status === 'pending_checkin')
+  );
+
+  const hourlyRate = richTrainer?.hourlyRate ?? (basicTrainer as any)?.hourlyRate ?? 50;
+  const avatar = richTrainer?.avatar ?? (basicTrainer as any)?.image ?? '/placeholder-user.jpg';
+  const rating = richTrainer?.rating ?? (basicTrainer as any)?.rating ?? 4.8;
+  const yearsExp = richTrainer?.yearsExperience ?? (basicTrainer as any)?.yearsExperience ?? 5;
+
+  const openBookingDialog = () => {
+    setSelectedPlan(null);
+    setConfirming(false);
+    setBookingResult(null);
+    setBookingDialogOpen(true);
+  };
+
+  const handleConfirm = () => {
+    if (!selectedPlan || !user) return;
+    const result = addBooking({
+      userId: user.id,
+      trainerId: trainer.id,
+      trainerName: trainer.name,
+      trainerAvatar: avatar,
+      trainerSpecialization: trainer.specialization,
+      gymId: gym.id,
+      gymName: gym.name,
+      gymSlug: gym.slug,
+      plan: selectedPlan,
+      hourlyRate,
+    });
+    setBookingResult({ type: result.success ? 'success' : 'error', text: result.message });
+  };
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-8 max-w-4xl">
+        <Link href={`/gym/${slug}`}>
+          <Button variant="ghost" className="mb-6 gap-2 text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="h-4 w-4" />Back to {gym.name}
+          </Button>
+        </Link>
 
-        {/* Page header */}
-        <div className="flex items-center gap-4 mb-8">
-          <Link href="/owner"><Button variant="ghost" size="icon"><ArrowLeft className="h-5 w-5" /></Button></Link>
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Manage Trainers</h1>
-            <p className="text-muted-foreground">Add or remove trainers from your gym</p>
-          </div>
-        </div>
-
-        {/* Success toast */}
-        {addSuccessMsg && (
-          <div className="mb-4 flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/30 rounded-lg text-green-600 dark:text-green-400 text-sm">
-            <CheckCircle2 className="h-4 w-4 shrink-0" />{addSuccessMsg}
-          </div>
-        )}
-
-        {/* Gym info */}
-        {currentGym && (
-          <Card className="bg-card border-border/50 p-4 mb-6">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary/20 rounded-lg"><Building2 className="h-5 w-5 text-primary" /></div>
-                <div>
-                  <p className="font-semibold text-foreground">{currentGym.name}</p>
-                  <p className="text-sm text-muted-foreground">{currentGym.city}</p>
-                </div>
-              </div>
-              <div className="flex gap-6">
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-primary">{addedTrainers.length}</p>
-                  <p className="text-xs text-muted-foreground">In Your Gym</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-foreground">{getAvailableTrainersForGym(assignedIds).length}</p>
-                  <p className="text-xs text-muted-foreground">Available</p>
-                </div>
-              </div>
-            </div>
-          </Card>
-        )}
-
-        {/* ═══════════════════════════════════════════════
-            SECTION: ADD BY TRAINER ID
-        ═══════════════════════════════════════════════ */}
-        <Card className="bg-card border-primary/30 border p-5 mb-8">
-          <div className="flex items-center gap-2 mb-1">
-            <IdCard className="h-5 w-5 text-primary" />
-            <h2 className="text-base font-bold text-foreground">Add Trainer by ID</h2>
-          </div>
-          <p className="text-sm text-muted-foreground mb-4">
-            Ask your trainer for their Trainer ID (shown on their dashboard) and enter it below to find and add them instantly.
-          </p>
-
-          <div className="flex gap-2 mb-3">
-            <div className="relative flex-1">
-              <IdCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="e.g. TRN-001"
-                value={idSearchQuery}
-                onChange={e => { setIdSearchQuery(e.target.value); setIdSearchResult(null); }}
-                onKeyDown={e => e.key === 'Enter' && handleIdSearch()}
-                className="pl-9 bg-secondary border-border font-mono uppercase tracking-wider"
-              />
-            </div>
-            <Button onClick={handleIdSearch} disabled={!idSearchQuery.trim()} className="bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5">
-              <Search className="h-4 w-4" />Search
-            </Button>
-            {idSearchQuery && (
-              <Button variant="ghost" size="icon" onClick={() => { setIdSearchQuery(''); setIdSearchResult(null); }}>
-                <X className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-
-          {/* Search result */}
-          {idSearchResult === 'not_found' && (
-            <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-destructive">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              No trainer found with ID <strong className="font-mono ml-1">{idSearchQuery}</strong>. Please check the ID and try again.
-            </div>
-          )}
-
-          {idSearchResult && idSearchResult !== 'not_found' && (
-            <div className="p-4 bg-secondary/50 border border-border rounded-lg">
-              <div className="flex items-center gap-4">
-                <img src={idSearchResult.avatar} alt={idSearchResult.name} className="h-14 w-14 rounded-xl object-cover border border-border" />
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-foreground">{idSearchResult.name}</p>
-                    <Badge className="bg-primary/20 text-primary text-xs">{idSearchResult.trainerId}</Badge>
+        {/* Profile Hero */}
+        <Card className="border-border/50 mb-8 overflow-hidden">
+          <div className="h-2 bg-gradient-to-r from-primary via-primary/60 to-primary/20" />
+          <CardContent className="p-6">
+            <div className="flex flex-col md:flex-row gap-6 items-start">
+              <img src={avatar} alt={trainer.name} className="w-36 h-36 rounded-2xl object-cover border-2 border-border shrink-0" />
+              <div className="flex-1">
+                <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                  <div>
+                    <h1 className="text-3xl font-bold text-foreground">{trainer.name}</h1>
+                    <Badge className="mt-1 bg-primary/20 text-primary text-sm">{trainer.specialization}</Badge>
+                    {richTrainer?.trainerId && (
+                      <div className="flex items-center gap-1.5 mt-2">
+                        <IdCard className="h-3.5 w-3.5 text-primary" />
+                        <span className="text-xs font-mono font-bold text-primary">{richTrainer.trainerId}</span>
+                      </div>
+                    )}
                   </div>
-                  <p className="text-sm text-muted-foreground">{idSearchResult.specialization} · {idSearchResult.city}</p>
-                  <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                    <span>⭐ {idSearchResult.rating}</span>
-                    <span>🏆 {idSearchResult.yearsExperience} yrs exp</span>
-                    <span>₹{idSearchResult.hourlyRate}/hr</span>
+                  <div className="flex items-center gap-1.5 bg-yellow-500/10 px-3 py-1.5 rounded-lg">
+                    <Star className="h-5 w-5 text-yellow-400 fill-yellow-400" />
+                    <span className="font-bold text-foreground">{rating}</span>
+                    <span className="text-muted-foreground text-sm">rating</span>
                   </div>
                 </div>
-                {assignedIds.includes(idSearchResult.id) ? (
-                  <Badge variant="outline" className="text-green-500 border-green-500/50 shrink-0">
-                    <UserCheck className="h-3.5 w-3.5 mr-1" />Already Added
-                  </Badge>
-                ) : (
-                  <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90 shrink-0 gap-1.5" onClick={handleAddFromIdSearch}>
-                    <UserPlus className="h-4 w-4" />Add to Gym
-                  </Button>
-                )}
+                {richTrainer?.bio && <p className="text-muted-foreground leading-relaxed mb-4">{richTrainer.bio}</p>}
+                <div className="flex flex-wrap gap-4 text-sm">
+                  <span className="flex items-center gap-1.5 text-muted-foreground"><Award className="h-4 w-4 text-primary" />{yearsExp} years experience</span>
+                  <span className="flex items-center gap-1.5 text-muted-foreground"><DollarSign className="h-4 w-4 text-green-500" />₹{hourlyRate}/hour</span>
+                  {richTrainer?.city && <span className="flex items-center gap-1.5 text-muted-foreground"><MapPin className="h-4 w-4 text-primary" />{richTrainer.city}</span>}
+                  {richTrainer?.availability && <span className="flex items-center gap-1.5 text-muted-foreground"><Clock className="h-4 w-4 text-primary" />{richTrainer.availability}</span>}
+                </div>
               </div>
             </div>
-          )}
+          </CardContent>
         </Card>
 
-        {/* ═══════════════════════════════════════════════
-            SECTION 1: YOUR GYM'S TRAINERS
-        ═══════════════════════════════════════════════ */}
-        <div className="mb-10">
-          <div className="flex items-center gap-3 mb-5">
-            <UserCheck className="h-5 w-5 text-green-500" />
-            <h2 className="text-xl font-bold text-foreground">Your Gym's Trainers</h2>
-            <Badge className="bg-green-500/20 text-green-500">{addedTrainers.length}</Badge>
-          </div>
-
-          {addedTrainers.length === 0 ? (
-            <Card className="bg-card border-border/50 border-dashed p-10 text-center">
-              <Users className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-40" />
-              <p className="text-muted-foreground mb-1">No trainers added yet</p>
-              <p className="text-sm text-muted-foreground">Use the Trainer ID search above or browse available trainers below</p>
+        <div className="grid md:grid-cols-3 gap-6">
+          {/* Left: Details */}
+          <div className="md:col-span-2 space-y-6">
+            {richTrainer?.certifications && (
+              <Card className="border-border/50">
+                <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Award className="h-5 w-5 text-primary" />Certifications</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-2">
+                    {richTrainer.certifications.split(',').map(c => <Badge key={c.trim()} variant="secondary">{c.trim()}</Badge>)}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            {richTrainer && (
+              <Card className="border-border/50">
+                <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Zap className="h-5 w-5 text-primary" />Contact</CardTitle></CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  <div className="flex items-center gap-3 text-muted-foreground"><Mail className="h-4 w-4" />{richTrainer.email}</div>
+                  {richTrainer.phone && <div className="flex items-center gap-3 text-muted-foreground"><Phone className="h-4 w-4" />{richTrainer.phone}</div>}
+                </CardContent>
+              </Card>
+            )}
+            <Card className="border-border/50">
+              <CardHeader><CardTitle className="flex items-center gap-2 text-base"><MapPin className="h-5 w-5 text-primary" />Working At</CardTitle></CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-3 p-3 bg-secondary/50 rounded-lg">
+                  <div className="p-2 bg-primary/20 rounded-lg"><MapPin className="h-5 w-5 text-primary" /></div>
+                  <div><p className="font-medium text-foreground">{gym.name}</p><p className="text-sm text-muted-foreground">{gym.city}, {gym.state}</p></div>
+                </div>
+              </CardContent>
             </Card>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {addedTrainers.map(t => <TrainerCard key={t.id} trainer={t} isAdded={true} />)}
-            </div>
-          )}
-        </div>
-
-        {/* Divider */}
-        <div className="relative my-8">
-          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-border" /></div>
-          <div className="relative flex justify-center">
-            <span className="bg-background px-4 text-sm text-muted-foreground">Browse & Add Available Trainers</span>
-          </div>
-        </div>
-
-        {/* ═══════════════════════════════════════════════
-            SECTION 2: AVAILABLE TRAINERS + search bar
-        ═══════════════════════════════════════════════ */}
-        <div>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
-            <div className="flex items-center gap-3">
-              <UserPlus className="h-5 w-5 text-primary" />
-              <h2 className="text-xl font-bold text-foreground">Available Trainers</h2>
-              <Badge className="bg-primary/20 text-primary">{filteredAvailable.length}</Badge>
-            </div>
-            {/* Search bar */}
-            <div className="relative sm:w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by name, ID, specialty..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="pl-9 bg-secondary border-border"
-              />
-              {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
           </div>
 
-          {filteredAvailable.length === 0 ? (
-            <Card className="bg-card border-border/50 border-dashed p-10 text-center">
-              {searchQuery ? (
-                <>
-                  <Search className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-40" />
-                  <p className="font-semibold text-foreground mb-1">No results for "{searchQuery}"</p>
-                  <p className="text-sm text-muted-foreground">Try a different name, ID, or specialization</p>
-                </>
-              ) : (
-                <>
-                  <UserCheck className="h-10 w-10 text-green-500 mx-auto mb-3" />
-                  <p className="font-semibold text-foreground mb-1">All trainers are in your gym!</p>
-                  <p className="text-sm text-muted-foreground">Every registered trainer has been added to {currentGym?.name}.</p>
-                </>
-              )}
+          {/* Right: Book panel */}
+          <div>
+            <Card className="border-border/50 sticky top-6">
+              <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Calendar className="h-5 w-5 text-primary" />Book This Trainer</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                {!isAuthenticated ? (
+                  <div className="text-center py-4">
+                    <Lock className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-50" />
+                    <p className="text-sm text-muted-foreground mb-4">Login to book this trainer</p>
+                    <Link href="/login"><Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">Login to Book</Button></Link>
+                  </div>
+                ) : !hasActiveSubscription ? (
+                  <div className="text-center py-4">
+                    <Lock className="h-10 w-10 text-yellow-500 mx-auto mb-3" />
+                    <p className="text-sm font-medium text-foreground mb-1">Membership Required</p>
+                    <p className="text-xs text-muted-foreground mb-4">Get a membership at {gym.name} first to book trainers.</p>
+                    <a href={`/gym/${slug}#pricing`}>
+                      <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90 mb-2">Get Membership</Button>
+                    </a>
+                    <Link href="/subscriptions">
+                      <Button variant="ghost" className="w-full text-xs text-muted-foreground">View My Plans</Button>
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="p-3 bg-green-500/10 rounded-lg flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+                      <p className="text-sm text-green-600 dark:text-green-400">Active membership — ready to book!</p>
+                    </div>
+                    {(Object.entries(PLAN_META) as [BookingPlan, typeof PLAN_META[BookingPlan]][]).map(([plan, meta]) => (
+                      <div key={plan} className="p-3 rounded-lg border border-border bg-secondary/30">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium text-foreground text-sm">{meta.label}</p>
+                            <p className="text-xs text-muted-foreground">{meta.sessions} session{meta.sessions > 1 ? 's' : ''}</p>
+                          </div>
+                          <p className="font-bold text-primary text-sm">₹{hourlyRate * meta.multiplier}</p>
+                        </div>
+                      </div>
+                    ))}
+                    <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90 mt-2" onClick={openBookingDialog}>
+                      Book This Trainer
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
             </Card>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {filteredAvailable.map(t => <TrainerCard key={t.id} trainer={t} isAdded={false} />)}
-            </div>
-          )}
+          </div>
         </div>
       </main>
 
-      {/* TRAINER PROFILE DIALOG */}
-      <Dialog open={profileDialogOpen} onOpenChange={setProfileDialogOpen}>
+      {/* Booking Dialog */}
+      <Dialog open={bookingDialogOpen} onOpenChange={open => { if (!open) { setBookingDialogOpen(false); setBookingResult(null); } }}>
         <DialogContent className="bg-card border-border max-w-md">
           <DialogHeader>
-            <DialogTitle>Trainer Profile</DialogTitle>
-            <DialogDescription>Full details for this trainer</DialogDescription>
+            <DialogTitle>Book {trainer.name}</DialogTitle>
+            <DialogDescription>Choose a plan and confirm your booking</DialogDescription>
           </DialogHeader>
-          {viewTrainer && (
-            <div className="space-y-5">
-              <div className="flex items-center gap-4">
-                <img src={viewTrainer.avatar} alt={viewTrainer.name} className="h-20 w-20 rounded-xl object-cover border border-border" />
-                <div>
-                  <h2 className="text-xl font-bold text-foreground">{viewTrainer.name}</h2>
-                  <Badge className="bg-primary/20 text-primary mt-1">{viewTrainer.specialization}</Badge>
-                  {/* Trainer ID shown in profile */}
-                  <div className="flex items-center gap-1.5 mt-2">
-                    <IdCard className="h-3.5 w-3.5 text-primary" />
-                    <span className="text-sm font-mono font-semibold text-primary">{viewTrainer.trainerId}</span>
+
+          {!bookingResult ? (
+            !confirming ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 p-3 bg-secondary/50 rounded-lg">
+                  <img src={avatar} alt={trainer.name} className="h-12 w-12 rounded-lg object-cover" />
+                  <div>
+                    <p className="font-semibold text-foreground">{trainer.name}</p>
+                    <p className="text-sm text-muted-foreground">{trainer.specialization} · ₹{hourlyRate}/hr</p>
                   </div>
                 </div>
+                <p className="text-sm font-medium">Select a plan:</p>
+                <div className="space-y-2">
+                  {(Object.entries(PLAN_META) as [BookingPlan, typeof PLAN_META[BookingPlan]][]).map(([plan, meta]) => (
+                    <button key={plan} onClick={() => setSelectedPlan(plan)}
+                      className={`w-full text-left p-3 rounded-lg border transition-all ${selectedPlan === plan ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}`}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-foreground text-sm">{meta.label}</p>
+                          <p className="text-xs text-muted-foreground">{meta.sessions} session{meta.sessions > 1 ? 's' : ''}</p>
+                        </div>
+                        <p className="font-bold text-primary">₹{hourlyRate * meta.multiplier}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-3">
+                  <Button variant="outline" className="flex-1 border-border bg-transparent" onClick={() => setBookingDialogOpen(false)}>Cancel</Button>
+                  <Button className="flex-1 bg-primary text-primary-foreground" disabled={!selectedPlan} onClick={() => setConfirming(true)}>Continue</Button>
+                </div>
               </div>
-
-              <p className="text-sm text-muted-foreground leading-relaxed">{viewTrainer.bio}</p>
-
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: 'Experience', value: `${viewTrainer.yearsExperience} years` },
-                  { label: 'Rating', value: `⭐ ${viewTrainer.rating}` },
-                  { label: 'Hourly Rate', value: `₹${viewTrainer.hourlyRate}/hr` },
-                  { label: 'Availability', value: viewTrainer.availability },
-                ].map(({ label, value }) => (
-                  <div key={label} className="p-3 bg-secondary/50 rounded-lg">
-                    <p className="text-xs text-muted-foreground mb-1">{label}</p>
-                    <p className="font-semibold text-foreground text-sm">{value}</p>
-                  </div>
-                ))}
+            ) : (
+              <div className="space-y-4">
+                {selectedPlan && (() => {
+                  const meta = PLAN_META[selectedPlan];
+                  return (
+                    <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl space-y-2">
+                      {[['Trainer', trainer.name], ['Plan', meta.label], ['Sessions', String(meta.sessions)], ['Gym', gym.name]].map(([k, v]) => (
+                        <div key={k} className="flex justify-between text-sm"><span className="text-muted-foreground">{k}</span><span className="font-medium">{v}</span></div>
+                      ))}
+                      <div className="flex justify-between font-bold border-t border-border/50 pt-2">
+                        <span>Total</span><span className="text-primary">₹{hourlyRate * meta.multiplier}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+                <div className="flex gap-3">
+                  <Button variant="outline" className="flex-1 border-border bg-transparent" onClick={() => setConfirming(false)}>Back</Button>
+                  <Button className="flex-1 bg-primary text-primary-foreground" onClick={handleConfirm}>Confirm Booking</Button>
+                </div>
               </div>
-
-              <div className="space-y-2 text-sm border-t border-border pt-4">
-                <div className="flex items-center gap-2 text-muted-foreground"><Mail className="h-4 w-4" />{viewTrainer.email}</div>
-                <div className="flex items-center gap-2 text-muted-foreground"><Phone className="h-4 w-4" />{viewTrainer.phone}</div>
-                <div className="flex items-center gap-2 text-muted-foreground"><Award className="h-4 w-4" /><span className="text-xs">{viewTrainer.certifications}</span></div>
-              </div>
-
-              {!assignedIds.includes(viewTrainer.id) ? (
-                <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => { handleAddTrainer(viewTrainer.id, viewTrainer.name); setProfileDialogOpen(false); }}>
-                  <UserPlus className="h-4 w-4 mr-2" />Add to {currentGym?.name}
-                </Button>
+            )
+          ) : (
+            <div className="py-6 text-center">
+              {bookingResult.type === 'success'
+                ? <CheckCircle2 className="h-14 w-14 text-green-500 mx-auto mb-4" />
+                : <AlertCircle className="h-14 w-14 text-destructive mx-auto mb-4" />}
+              <p className={`font-semibold text-lg mb-2 ${bookingResult.type === 'success' ? 'text-green-500' : 'text-destructive'}`}>
+                {bookingResult.type === 'success' ? 'Booking Confirmed! 🎉' : 'Booking Failed'}
+              </p>
+              <p className="text-muted-foreground text-sm mb-4">{bookingResult.text}</p>
+              {bookingResult.type === 'success' ? (
+                <Link href="/subscriptions"><Button className="bg-primary text-primary-foreground">View My Dashboard</Button></Link>
               ) : (
-                <Button variant="outline" className="w-full border-destructive/50 text-destructive hover:bg-destructive/10"
-                  onClick={() => { setTrainerToRemove(viewTrainer.id); setProfileDialogOpen(false); setRemoveDialogOpen(true); }}>
-                  <Trash2 className="h-4 w-4 mr-2" />Remove from {currentGym?.name}
-                </Button>
+                <Button className="bg-primary text-primary-foreground" onClick={() => { setBookingResult(null); setConfirming(false); }}>Try Again</Button>
               )}
             </div>
           )}
         </DialogContent>
       </Dialog>
-
-      {/* REMOVE CONFIRM */}
-      <AlertDialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>
-        <AlertDialogContent className="bg-card border-border">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove Trainer?</AlertDialogTitle>
-            <AlertDialogDescription>This trainer will be removed from {currentGym?.name}. You can re-add them anytime.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="border-border bg-transparent">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRemoveConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Remove</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
