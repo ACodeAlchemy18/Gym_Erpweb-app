@@ -7,18 +7,173 @@ import { getFeaturedGyms, getGymBySlug } from "@/data/gyms";
 import { GymCard } from "@/components/gym-card";
 import { useAuth } from "@/contexts/auth-context";
 import { useUser } from "@/contexts/user-context";
-import { Dumbbell, MapPin, Clock, Award, Users, ChevronRight, Star, Calendar, Search } from "lucide-react";
+import { getUserBookings, PLAN_META, type TrainerBooking } from "@/data/trainer-booking-store";
+import {
+  Dumbbell, MapPin, Clock, Award, Users, ChevronRight,
+  Calendar, TrendingUp, Flame, CheckCircle2, ChevronDown, ChevronUp,
+  BarChart3, Target, Zap,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import Link from "next/link";
 import { getAllOwnerGyms } from "@/data/owner-gyms";
 import { getTrainersByGymId } from "@/data/trainer-gyms";
+
+// ─── Workout plan data (same as workout page) ────────────────────
+const TODAY_DAY = new Date().toLocaleDateString('en-US', { weekday: 'long' }) as string;
+const TODAY_DATE = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+
+const WORKOUT_PLANS = [
+  {
+    id: 'd1', title: "Beginner Full Body", level: "Beginner", color: "bg-green-500", textColor: "text-green-500",
+    schedule: {
+      Monday:    { name: "Upper Body Basics", muscles: "Chest · Back · Shoulders", exercises: [
+        { name: "Push-ups", sets: 3, reps: "8-10", rest: "60s", tip: "Keep core tight, elbows at 45°" },
+        { name: "Dumbbell Rows", sets: 3, reps: "10 each side", rest: "60s", tip: "Pull to hip, not armpit" },
+        { name: "Shoulder Press", sets: 3, reps: "10", rest: "60s", tip: "Don't arch your lower back" },
+        { name: "Band Pull-aparts", sets: 2, reps: "15", rest: "45s", tip: "Full range, slow eccentric" },
+      ]},
+      Tuesday:   { name: "Rest / Light Walk", muscles: "Recovery", exercises: [
+        { name: "Brisk Walk", sets: 1, reps: "20-30 min", rest: "-", tip: "Keep heart rate moderate" },
+        { name: "Full Body Stretch", sets: 1, reps: "10 min", rest: "-", tip: "Hold each stretch 30 seconds" },
+      ]},
+      Wednesday: { name: "Lower Body Basics", muscles: "Quads · Hamstrings · Glutes", exercises: [
+        { name: "Bodyweight Squats", sets: 3, reps: "12", rest: "60s", tip: "Knees over toes, chest up" },
+        { name: "Reverse Lunges", sets: 3, reps: "10 each leg", rest: "60s", tip: "Keep front shin vertical" },
+        { name: "Glute Bridges", sets: 3, reps: "15", rest: "45s", tip: "Squeeze at the top for 1 second" },
+        { name: "Calf Raises", sets: 3, reps: "15", rest: "30s", tip: "Full range of motion" },
+      ]},
+      Thursday:  { name: "Rest / Mobility", muscles: "Recovery", exercises: [
+        { name: "Hip Circles", sets: 2, reps: "10 each direction", rest: "-", tip: "Keep core engaged" },
+        { name: "Cat-Cow Stretch", sets: 2, reps: "10", rest: "-", tip: "Move through full spine" },
+        { name: "Pigeon Pose", sets: 2, reps: "45s each side", rest: "-", tip: "Breathe into the stretch" },
+      ]},
+      Friday:    { name: "Core & Cardio", muscles: "Abs · Core · Full Body", exercises: [
+        { name: "Plank", sets: 3, reps: "30s", rest: "45s", tip: "Neutral spine, don't sag hips" },
+        { name: "Dead Bug", sets: 3, reps: "10 each side", rest: "45s", tip: "Lower back pressed to floor" },
+        { name: "Crunches", sets: 3, reps: "15", rest: "45s", tip: "Don't pull your neck" },
+        { name: "Jumping Jacks", sets: 3, reps: "30", rest: "30s", tip: "Land softly, arms fully extend" },
+      ]},
+      Saturday:  { name: "Active Recovery", muscles: "Full Body Mobility", exercises: [
+        { name: "Yoga Flow", sets: 1, reps: "20 min", rest: "-", tip: "Focus on breathing" },
+        { name: "Foam Rolling", sets: 1, reps: "10 min", rest: "-", tip: "Spend extra time on tight spots" },
+      ]},
+      Sunday:    { name: "Complete Rest", muscles: "Recovery", exercises: [
+        { name: "Sleep & Recovery", sets: 1, reps: "8 hours", rest: "-", tip: "Sleep is when muscles grow" },
+        { name: "Light Walk", sets: 1, reps: "Optional", rest: "-", tip: "Keep it easy and enjoyable" },
+      ]},
+    },
+  },
+  {
+    id: 'd2', title: "Weight Loss HIIT", level: "Intermediate", color: "bg-orange-500", textColor: "text-orange-500",
+    schedule: {
+      Monday:    { name: "HIIT Cardio", muscles: "Full Body · Cardio", exercises: [
+        { name: "Burpees", sets: 4, reps: "10", rest: "30s", tip: "Explode off the floor, land softly" },
+        { name: "Mountain Climbers", sets: 4, reps: "20", rest: "30s", tip: "Keep hips level, fast pace" },
+        { name: "Jump Squats", sets: 4, reps: "12", rest: "30s", tip: "Land with soft knees" },
+        { name: "High Knees", sets: 3, reps: "30s", rest: "20s", tip: "Pump arms to increase intensity" },
+      ]},
+      Tuesday:   { name: "Strength Circuit", muscles: "Legs · Glutes · Core", exercises: [
+        { name: "Goblet Squat", sets: 4, reps: "12", rest: "45s", tip: "Hold weight at chest, elbows inside knees" },
+        { name: "KB Swings", sets: 4, reps: "15", rest: "45s", tip: "Hip hinge, not squat" },
+        { name: "Step-ups", sets: 3, reps: "10 each leg", rest: "45s", tip: "Drive through the heel" },
+        { name: "Box Jumps", sets: 3, reps: "8", rest: "60s", tip: "Full extension at takeoff" },
+      ]},
+      Wednesday: { name: "Active Recovery", muscles: "Recovery", exercises: [
+        { name: "Swimming / Walking", sets: 1, reps: "30 min", rest: "-", tip: "Keep heart rate under 130 bpm" },
+        { name: "Stretching Routine", sets: 1, reps: "15 min", rest: "-", tip: "Focus on hip flexors and hamstrings" },
+      ]},
+      Thursday:  { name: "Core Blast", muscles: "Abs · Obliques · Lower Back", exercises: [
+        { name: "Russian Twists", sets: 3, reps: "20", rest: "30s", tip: "Lift feet for more challenge" },
+        { name: "Leg Raises", sets: 3, reps: "15", rest: "30s", tip: "Lower back stays on floor" },
+        { name: "Flutter Kicks", sets: 3, reps: "30s", rest: "30s", tip: "Small fast kicks, breathe steadily" },
+        { name: "Side Plank", sets: 3, reps: "20s each side", rest: "30s", tip: "Stack feet or stagger for balance" },
+      ]},
+      Friday:    { name: "Full Body Cardio", muscles: "Full Body · Endurance", exercises: [
+        { name: "Jumping Jacks", sets: 3, reps: "40", rest: "30s", tip: "Maintain rhythm throughout" },
+        { name: "Speed Skaters", sets: 3, reps: "20", rest: "30s", tip: "Reach for the floor on each side" },
+        { name: "Squat to Press", sets: 3, reps: "12", rest: "45s", tip: "Full squat depth, arms fully extended" },
+        { name: "Tuck Jumps", sets: 3, reps: "8", rest: "45s", tip: "Land softly, immediate next rep" },
+      ]},
+      Saturday:  { name: "Long Cardio", muscles: "Cardiovascular", exercises: [
+        { name: "Steady Run / Jog", sets: 1, reps: "30-45 min", rest: "-", tip: "Conversational pace, zone 2" },
+        { name: "Cool Down Walk", sets: 1, reps: "10 min", rest: "-", tip: "Gradually reduce heart rate" },
+      ]},
+      Sunday:    { name: "Rest Day", muscles: "Recovery", exercises: [
+        { name: "Complete Rest", sets: 1, reps: "Full day", rest: "-", tip: "Trust the process" },
+      ]},
+    },
+  },
+  {
+    id: 'd3', title: "Muscle Building", level: "Advanced", color: "bg-primary", textColor: "text-primary",
+    schedule: {
+      Monday:    { name: "Chest & Triceps", muscles: "Pecs · Triceps · Front Delts", exercises: [
+        { name: "Flat Bench Press", sets: 4, reps: "8-10", rest: "90s", tip: "Retract scapula, slight arch" },
+        { name: "Incline DB Press", sets: 3, reps: "10-12", rest: "75s", tip: "30-45° incline, controlled eccentric" },
+        { name: "Cable Flyes", sets: 3, reps: "12-15", rest: "60s", tip: "Keep slight bend in elbows" },
+        { name: "Tricep Dips", sets: 3, reps: "12", rest: "60s", tip: "Lean slightly forward for chest" },
+        { name: "Overhead Tricep Extension", sets: 3, reps: "12", rest: "60s", tip: "Keep elbows pointing forward" },
+      ]},
+      Tuesday:   { name: "Back & Biceps", muscles: "Lats · Rhomboids · Biceps", exercises: [
+        { name: "Deadlift", sets: 4, reps: "5-6", rest: "120s", tip: "Bar over mid-foot, hinge from hips" },
+        { name: "Pull-ups", sets: 3, reps: "8-10", rest: "90s", tip: "Full dead hang at bottom" },
+        { name: "Barbell Row", sets: 3, reps: "8-10", rest: "75s", tip: "Pull to lower sternum" },
+        { name: "Seated Cable Row", sets: 3, reps: "12", rest: "60s", tip: "Squeeze shoulder blades together" },
+        { name: "Hammer Curls", sets: 3, reps: "12", rest: "60s", tip: "Neutral grip, no swinging" },
+      ]},
+      Wednesday: { name: "Rest / Mobility", muscles: "Recovery", exercises: [
+        { name: "Foam Rolling", sets: 1, reps: "15 min", rest: "-", tip: "Focus on thoracic spine and lats" },
+        { name: "Band Shoulder Circles", sets: 3, reps: "10", rest: "-", tip: "Improve shoulder health" },
+        { name: "Hip Flexor Stretch", sets: 3, reps: "45s each", rest: "-", tip: "Posterior pelvic tilt" },
+      ]},
+      Thursday:  { name: "Legs & Glutes", muscles: "Quads · Hamstrings · Glutes · Calves", exercises: [
+        { name: "Back Squat", sets: 4, reps: "8-10", rest: "120s", tip: "Break parallel, knees track toes" },
+        { name: "Romanian Deadlift", sets: 3, reps: "10", rest: "90s", tip: "Hinge at hip, slight knee bend" },
+        { name: "Leg Press", sets: 3, reps: "12", rest: "75s", tip: "Feet shoulder-width, drive through heels" },
+        { name: "Walking Lunges", sets: 3, reps: "10 each leg", rest: "60s", tip: "90° front knee angle" },
+        { name: "Standing Calf Raises", sets: 4, reps: "15-20", rest: "45s", tip: "Full range, pause at top" },
+      ]},
+      Friday:    { name: "Shoulders & Traps", muscles: "Delts · Traps · Rotator Cuff", exercises: [
+        { name: "Overhead Press", sets: 4, reps: "8-10", rest: "90s", tip: "Full lockout, vertical bar path" },
+        { name: "Lateral Raises", sets: 4, reps: "15", rest: "60s", tip: "Lead with elbows, slight lean" },
+        { name: "Rear Delt Flyes", sets: 3, reps: "15", rest: "60s", tip: "Horizontal pull, squeeze at peak" },
+        { name: "Face Pulls", sets: 3, reps: "15", rest: "60s", tip: "External rotation at peak" },
+        { name: "Barbell Shrugs", sets: 3, reps: "12", rest: "60s", tip: "Full elevation, hold 1 second" },
+      ]},
+      Saturday:  { name: "Arms & Abs", muscles: "Biceps · Triceps · Core", exercises: [
+        { name: "EZ Bar Curl", sets: 3, reps: "10-12", rest: "60s", tip: "Full extension at bottom" },
+        { name: "Skull Crushers", sets: 3, reps: "10-12", rest: "60s", tip: "Bar to forehead level" },
+        { name: "Concentration Curls", sets: 3, reps: "12", rest: "45s", tip: "Elbow on inner thigh" },
+        { name: "Cable Crunch", sets: 4, reps: "15", rest: "45s", tip: "Round back, pull elbow to knee" },
+        { name: "Hanging Leg Raises", sets: 3, reps: "12", rest: "60s", tip: "Posterior pelvic tilt at top" },
+      ]},
+      Sunday:    { name: "Complete Rest", muscles: "Recovery", exercises: [
+        { name: "Sleep & Nutrition", sets: 1, reps: "Full day", rest: "-", tip: "Hit protein target: 1.6-2.2g per kg bodyweight" },
+      ]},
+    },
+  },
+];
+
+// ─── Dummy progress data ─────────────────────────────────────────
+const PROGRESS = [
+  { label: "Workouts Completed", value: 12, total: 20, color: "bg-primary", icon: "🏋️" },
+  { label: "This Week's Sessions", value: 3, total: 5, color: "bg-green-500", icon: "📅" },
+  { label: "Calories Burned", value: 4200, total: 8000, color: "bg-orange-500", icon: "🔥", suffix: " kcal" },
+  { label: "Active Days This Month", value: 18, total: 30, color: "bg-blue-500", icon: "⚡" },
+];
+
+const WEEKLY_CHECKIN = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const DONE_DAYS = [0, 1, 2]; // Mon Tue Wed done (dummy)
 
 export default function HomePage() {
   const { isAuthenticated, user } = useAuth();
   const userData = useUser();
   const [allGyms, setAllGyms] = useState<any[]>([]);
+  const [trainerBookings, setTrainerBookings] = useState<TrainerBooking[]>([]);
+  const [expandedWorkout, setExpandedWorkout] = useState(false);
+  const [activePlanIdx] = useState(0); // user's active plan (first by default)
 
   let subscriptions: any[] = [];
   try { subscriptions = userData.subscriptions; } catch {}
@@ -35,136 +190,248 @@ export default function HomePage() {
     setAllGyms([...staticGyms, ...ownerGyms]);
   }, []);
 
-  // Build subscribed gym details for dashboard view
+  useEffect(() => {
+    if (user) setTrainerBookings(getUserBookings(user.id));
+  }, [user]);
+
+  // Subscribed gym details
   const subscribedGyms = subscriptions.map(sub => {
     const gym = getGymBySlug(sub.gymSlug) || allGyms.find(g => g.id === sub.gymId);
-    const trainers = getTrainersByGymId(sub.gymId);
-    return { sub, gym, trainers };
+    return { sub, gym };
   }).filter(x => x.gym);
 
-  // Gyms NOT subscribed to (for explore section)
-  const subscribedIds = new Set(subscriptions.map(s => s.gymId));
-  const exploreGyms = allGyms.filter(g => !subscribedIds.has(g.id)).slice(0, 6);
+  // Booked trainers per gym
+  const bookingsByGym = trainerBookings.reduce<Record<string, TrainerBooking[]>>((acc, b) => {
+    if (!acc[b.gymId]) acc[b.gymId] = [];
+    acc[b.gymId].push(b);
+    return acc;
+  }, {});
 
-  // ── LOGGED IN USER WITH SUBSCRIPTIONS ──────────────────────────
+  // Today's workout
+  const activePlan = WORKOUT_PLANS[activePlanIdx];
+  const todayWorkout = (activePlan.schedule as any)[TODAY_DAY];
+  const isRestDay = todayWorkout?.exercises?.length <= 2 && todayWorkout?.muscles === 'Recovery';
+
+  // First subscribed gym name for welcome
+  const firstGymName = subscribedGyms[0]?.sub?.gymName || 'the gym';
+
+  // ── SUBSCRIBED USER DASHBOARD ────────────────────────────────────
   if (hasSubscriptions) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
+        <main className="container mx-auto px-4 py-8 max-w-4xl">
 
-        <main className="container mx-auto px-4 py-8 max-w-5xl">
           {/* Welcome */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-foreground">Welcome back! 👋</h1>
-            <p className="text-muted-foreground mt-1">Here's your fitness dashboard</p>
+          <div className="mb-6">
+            <p className="text-muted-foreground text-sm">{TODAY_DATE}</p>
+            <h1 className="text-3xl font-bold text-foreground mt-0.5">
+              Welcome back to <span className="text-primary">{firstGymName}</span> 💪
+            </h1>
           </div>
 
-          {/* Stats row */}
-          <div className="grid grid-cols-3 gap-4 mb-10">
-            <Card className="border-border/50 p-4 text-center">
-              <p className="text-2xl font-bold text-primary">{subscriptions.length}</p>
-              <p className="text-xs text-muted-foreground mt-1">Active Memberships</p>
-            </Card>
-            <Card className="border-border/50 p-4 text-center">
-              <p className="text-2xl font-bold text-foreground">
-                {subscribedGyms.reduce((s, g) => s + g.trainers.length, 0)}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">Available Trainers</p>
-            </Card>
-            <Card className="border-border/50 p-4 text-center">
-              <p className="text-2xl font-bold text-green-500">
-                ₹{subscriptions.reduce((s, sub) => s + sub.amount, 0)}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">Total Invested</p>
-            </Card>
-          </div>
+          {/* ── TODAY'S WORKOUT ── */}
+          <Card className="mb-6 border-border/50 overflow-hidden">
+            <div className={`h-1.5 ${activePlan.color}`} />
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge className={`${activePlan.color} text-white text-xs`}>{activePlan.level}</Badge>
+                    <Badge variant="outline" className="text-xs border-border">
+                      📋 {activePlan.title}
+                    </Badge>
+                  </div>
+                  <h2 className="text-lg font-bold text-foreground">
+                    {isRestDay ? "🛋️ Rest & Recovery Day" : `Today: ${todayWorkout?.name}`}
+                  </h2>
+                  <p className="text-sm text-muted-foreground">{todayWorkout?.muscles}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-xs text-muted-foreground">Today</p>
+                  <p className="text-sm font-semibold text-foreground">{TODAY_DAY}</p>
+                </div>
+              </div>
 
-          {/* Subscribed Gyms + Trainers */}
-          <section className="mb-12">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-xl font-bold text-foreground">Your Gyms & Trainers</h2>
+              {/* Exercise list */}
+              {todayWorkout?.exercises && (
+                <>
+                  <div className="space-y-2">
+                    {(expandedWorkout ? todayWorkout.exercises : todayWorkout.exercises.slice(0, 3)).map((ex: any, i: number) => (
+                      <div key={i} className={`flex items-start gap-3 p-3 rounded-lg ${isRestDay ? 'bg-secondary/30' : 'bg-secondary/50'}`}>
+                        <div className={`h-6 w-6 rounded-full ${activePlan.color} text-white text-xs flex items-center justify-center font-bold shrink-0 mt-0.5`}>
+                          {i + 1}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2 mb-0.5">
+                            <p className="font-semibold text-foreground text-sm">{ex.name}</p>
+                            <div className="flex gap-1.5 shrink-0">
+                              {ex.sets > 1 && <Badge variant="outline" className="text-xs px-1.5 py-0 border-border">{ex.sets} sets</Badge>}
+                              <Badge variant="outline" className="text-xs px-1.5 py-0 border-border">{ex.reps}</Badge>
+                              {ex.rest !== '-' && <Badge variant="outline" className="text-xs px-1.5 py-0 border-border text-muted-foreground">Rest: {ex.rest}</Badge>}
+                            </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground italic">💡 {ex.tip}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {todayWorkout.exercises.length > 3 && (
+                    <button
+                      onClick={() => setExpandedWorkout(!expandedWorkout)}
+                      className="mt-3 w-full flex items-center justify-center gap-1.5 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {expandedWorkout ? <><ChevronUp className="h-4 w-4" />Show less</> : <><ChevronDown className="h-4 w-4" />Show {todayWorkout.exercises.length - 3} more exercises</>}
+                    </button>
+                  )}
+
+                  <div className="flex gap-2 mt-4">
+                    <Link href="/workout" className="flex-1">
+                      <Button variant="outline" className="w-full border-border bg-transparent text-sm gap-1.5">
+                        <Calendar className="h-4 w-4" />Full Weekly Plan
+                      </Button>
+                    </Link>
+                    {!isRestDay && (
+                      <Button className={`flex-1 ${activePlan.color.replace('bg-', 'bg-')} text-white text-sm gap-1.5`} style={{ backgroundColor: undefined }}
+                        onClick={() => {}}>
+                        <CheckCircle2 className="h-4 w-4" />Mark Complete
+                      </Button>
+                    )}
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ── PROGRESS BOARD ── */}
+          <Card className="mb-6 border-border/50">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <BarChart3 className="h-5 w-5 text-primary" />Progress Board
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {/* Weekly check-in strip */}
+              <div className="flex gap-1.5 mb-5">
+                {WEEKLY_CHECKIN.map((day, i) => (
+                  <div key={day} className="flex-1 text-center">
+                    <div className={`h-8 rounded-lg flex items-center justify-center mb-1 transition-all ${
+                      DONE_DAYS.includes(i)
+                        ? 'bg-green-500 text-white'
+                        : i === new Date().getDay() - 1
+                        ? 'bg-primary/20 border border-primary text-primary'
+                        : 'bg-secondary/50 text-muted-foreground'
+                    }`}>
+                      {DONE_DAYS.includes(i) ? <CheckCircle2 className="h-4 w-4" /> : <span className="text-xs font-medium">{day}</span>}
+                    </div>
+                    <span className="text-xs text-muted-foreground">{day}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Progress bars */}
+              <div className="grid sm:grid-cols-2 gap-4">
+                {PROGRESS.map(p => (
+                  <div key={p.label}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        <span>{p.icon}</span>{p.label}
+                      </span>
+                      <span className="text-xs font-bold text-foreground">
+                        {p.value}{p.suffix || ''} <span className="font-normal text-muted-foreground">/ {p.total}{p.suffix || ''}</span>
+                      </span>
+                    </div>
+                    <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                      <div className={`h-full ${p.color} rounded-full transition-all`}
+                        style={{ width: `${Math.min(100, (p.value / p.total) * 100)}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ── SUBSCRIBED GYMS + BOOKED TRAINERS ── */}
+          <section className="mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-foreground">My Gyms & Trainers</h2>
               <Link href="/subscriptions">
                 <Button variant="ghost" size="sm" className="text-primary gap-1 text-xs">
-                  View All <ChevronRight className="h-3.5 w-3.5" />
+                  Manage <ChevronRight className="h-3.5 w-3.5" />
                 </Button>
               </Link>
             </div>
 
-            <div className="space-y-6">
-              {subscribedGyms.map(({ sub, gym, trainers }) => {
-                const isActive = sub.status === 'active' || sub.status === 'pending_checkin';
+            <div className="space-y-4">
+              {subscribedGyms.map(({ sub, gym }) => {
+                const gymBookings = bookingsByGym[sub.gymId] || [];
                 const gymSlug = gym.slug || sub.gymSlug;
+                const isActive = sub.status === 'active' || sub.status === 'pending_checkin';
                 const daysLeft = Math.max(0, Math.ceil((new Date(sub.endDate).getTime() - Date.now()) / 86400000));
 
                 return (
                   <Card key={sub.id} className="border-border/50 overflow-hidden">
-                    <div className="h-1 bg-gradient-to-r from-primary to-primary/30" />
+                    <div className="h-1 bg-gradient-to-r from-primary to-primary/20" />
                     <CardContent className="p-5">
-                      {/* Gym header */}
-                      <div className="flex items-start justify-between gap-3 mb-4">
+                      {/* Gym header row */}
+                      <div className="flex items-center justify-between gap-3 mb-4">
                         <div className="flex items-center gap-3">
                           {gym.photos?.[0] && (
                             <img src={gym.photos[0]} alt={gym.name}
-                              className="h-14 w-14 rounded-xl object-cover border border-border shrink-0" />
+                              className="h-12 w-12 rounded-xl object-cover border border-border shrink-0" />
                           )}
                           <div>
                             <h3 className="font-bold text-foreground">{sub.gymName}</h3>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <Badge className={isActive ? "bg-green-500/20 text-green-400 text-xs" : "bg-yellow-500/20 text-yellow-500 text-xs"}>
+                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                              <Badge className={`text-xs ${isActive ? "bg-green-500/20 text-green-400" : "bg-yellow-500/20 text-yellow-500"}`}>
                                 {isActive ? "✅ Active" : "⏳ Check-in Needed"}
                               </Badge>
-                              <span className="text-xs text-muted-foreground">{daysLeft} days left</span>
+                              <span className="text-xs text-muted-foreground">{daysLeft} days left · {sub.planLabel}</span>
                             </div>
                           </div>
                         </div>
                         <Link href={`/gym/${gymSlug}`}>
-                          <Button variant="outline" size="sm" className="border-border bg-transparent text-xs">
-                            View Gym
-                          </Button>
+                          <Button variant="outline" size="sm" className="border-border bg-transparent text-xs">View Gym</Button>
                         </Link>
                       </div>
 
-                      {/* Trainers */}
-                      {trainers.length > 0 ? (
-                        <>
-                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
-                            Trainers at this gym
+                      {/* Booked Trainers */}
+                      {gymBookings.length > 0 ? (
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                            Your Booked Trainers
                           </p>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                            {trainers.slice(0, 3).map(trainer => (
-                              <Link key={trainer.id} href={`/gym/${gymSlug}/trainers/${trainer.id}`}>
-                                <div className="flex items-center gap-2 p-2.5 bg-secondary/50 rounded-lg hover:bg-secondary transition-colors cursor-pointer">
-                                  <img
-                                    src={trainer.avatar || trainer.image || '/placeholder-user.jpg'}
-                                    alt={trainer.name}
-                                    className="h-9 w-9 rounded-lg object-cover shrink-0"
-                                  />
-                                  <div className="min-w-0">
-                                    <p className="text-xs font-medium text-foreground truncate">{trainer.name}</p>
-                                    <p className="text-xs text-muted-foreground truncate">{trainer.specialization}</p>
-                                  </div>
+                          <div className="space-y-2">
+                            {gymBookings.map(booking => (
+                              <div key={booking.id} className="flex items-center gap-3 p-3 bg-secondary/40 rounded-xl">
+                                <img src={booking.trainerAvatar} alt={booking.trainerName}
+                                  className="h-11 w-11 rounded-xl object-cover border border-border shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-semibold text-foreground text-sm">{booking.trainerName}</p>
+                                  <p className="text-xs text-muted-foreground">{booking.trainerSpecialization}</p>
+                                  <p className="text-xs text-muted-foreground">{PLAN_META[booking.plan].label} · {booking.sessions} sessions · ₹{booking.amount}</p>
                                 </div>
-                              </Link>
+                                <Link href={`/gym/${gymSlug}/trainers/${booking.trainerId}`}>
+                                  <Button variant="outline" size="sm" className="border-border bg-transparent text-xs shrink-0">
+                                    View
+                                  </Button>
+                                </Link>
+                              </div>
                             ))}
-                            {trainers.length > 3 && (
-                              <Link href={`/gym/${gymSlug}#trainers`}>
-                                <div className="flex items-center justify-center gap-1 p-2.5 bg-secondary/50 rounded-lg hover:bg-secondary transition-colors cursor-pointer h-full">
-                                  <span className="text-xs text-muted-foreground">+{trainers.length - 3} more</span>
-                                  <ChevronRight className="h-3 w-3 text-muted-foreground" />
-                                </div>
-                              </Link>
-                            )}
                           </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between p-3 bg-secondary/30 rounded-xl">
+                          <p className="text-sm text-muted-foreground">No trainers booked yet</p>
                           {isActive && (
-                            <Link href={`/gym/${gymSlug}#trainers`} className="block mt-3">
-                              <Button size="sm" className="w-full bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5 text-xs">
-                                <Users className="h-3.5 w-3.5" />Browse All Trainers & Book
+                            <Link href={`/gym/${gymSlug}#trainers`}>
+                              <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90 text-xs gap-1">
+                                <Users className="h-3 w-3" />Book a Trainer
                               </Button>
                             </Link>
                           )}
-                        </>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">No trainers assigned to this gym yet.</p>
+                        </div>
                       )}
                     </CardContent>
                   </Card>
@@ -173,28 +440,26 @@ export default function HomePage() {
             </div>
           </section>
 
-          {/* Explore more gyms */}
-          {exploreGyms.length > 0 && (
-            <section>
-              <div className="flex items-center justify-between mb-5">
-                <div>
-                  <h2 className="text-xl font-bold text-foreground">Explore More Gyms</h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">Discover other gyms you haven't joined yet</p>
-                </div>
-                <Link href="/?showAll=1">
-                  <Button variant="ghost" size="sm" className="text-primary gap-1 text-xs">
-                    See All <ChevronRight className="h-3.5 w-3.5" />
-                  </Button>
-                </Link>
-              </div>
-              <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-                {exploreGyms.map(gym => <GymCard key={gym.id} gym={gym} />)}
-              </div>
-            </section>
-          )}
+          {/* Quick links */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            {[
+              { href: '/workout', icon: '🏋️', label: 'Workout Plans' },
+              { href: '/diet', icon: '🥗', label: 'Diet Plans' },
+              { href: '/subscriptions', icon: '📋', label: 'My Subscriptions' },
+              { href: '/gyms', icon: '🔍', label: 'Explore Gyms' },
+            ].map(({ href, icon, label }) => (
+              <Link key={href} href={href}>
+                <Card className="border-border/50 p-3 text-center hover:border-primary/50 transition-colors cursor-pointer h-full">
+                  <p className="text-2xl mb-1">{icon}</p>
+                  <p className="text-xs font-medium text-foreground">{label}</p>
+                </Card>
+              </Link>
+            ))}
+          </div>
+
         </main>
 
-        <footer className="py-12 border-t border-border/50 mt-16">
+        <footer className="py-10 border-t border-border/50 mt-8">
           <div className="container mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <div className="p-1.5 bg-primary rounded-lg"><Dumbbell className="h-5 w-5 text-primary-foreground" /></div>
@@ -207,12 +472,11 @@ export default function HomePage() {
     );
   }
 
-  // ── NOT LOGGED IN / NEW USER / NO SUBSCRIPTIONS ─────────────────
+  // ── NOT SUBSCRIBED / GUEST — show browse page ──────────────────
   return (
     <div className="min-h-screen bg-background">
       <Header />
 
-      {/* Hero */}
       <section className="relative py-20 md:py-32 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
         <div className="container mx-auto px-4 relative">
@@ -244,37 +508,28 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Featured Gyms */}
       <section id="featured" className="py-16 border-t border-border/50">
         <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h2 className="text-2xl md:text-3xl font-bold text-foreground">Featured Gyms</h2>
-              <p className="text-muted-foreground mt-1">Hand-picked premium fitness centers</p>
-            </div>
-          </div>
+          <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2">Featured Gyms</h2>
+          <p className="text-muted-foreground mb-8">Hand-picked premium fitness centers</p>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             {allGyms.map(gym => <GymCard key={gym.id} gym={gym} />)}
           </div>
         </div>
       </section>
 
-      {/* All Gyms */}
       <section id="all-gyms" className="py-16 border-t border-border/50">
         <div className="container mx-auto px-4">
-          <div className="mb-8">
-            <h2 className="text-2xl md:text-3xl font-bold text-foreground">All Gyms</h2>
-            <p className="text-muted-foreground mt-1">Explore our complete directory</p>
-          </div>
+          <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2">All Gyms</h2>
+          <p className="text-muted-foreground mb-8">Explore our complete directory</p>
           <GymList />
         </div>
       </section>
 
-      {/* Stats */}
       <section className="py-16 border-t border-border/50 bg-card">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {[["50+", "Partner Gyms"], ["15K+", "Active Members"], ["100+", "Expert Trainers"], ["4.8", "Average Rating"]].map(([val, label]) => (
+            {[["50+","Partner Gyms"],["15K+","Active Members"],["100+","Expert Trainers"],["4.8","Average Rating"]].map(([val,label]) => (
               <div key={label} className="text-center">
                 <p className="text-4xl font-bold text-primary">{val}</p>
                 <p className="text-muted-foreground mt-1">{label}</p>

@@ -7,7 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import {
   Dumbbell, Menu, User, Wallet, Calendar, ChevronRight,
-  LogOut, Users, Utensils, Apple, Compass, BookOpen,
+  LogOut, Users, Utensils, Compass, MapPin,
 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { useUser } from "@/contexts/user-context";
@@ -23,24 +23,23 @@ export function Header() {
   let walletBalance = 0, subscriptions: any[] = [];
   try { walletBalance = userData.walletBalance; subscriptions = userData.subscriptions; } catch {}
 
-  // Get avatar from onboarding data if available
   const onboardingData = isAuthenticated && user ? getOnboardingData(user.id) : null;
   const avatarSrc = onboardingData?.data?.avatar || user?.avatar || "/placeholder-user.jpg";
   const displayName = onboardingData?.data?.displayName || user?.name || "User";
 
   const handleLogout = () => { logout(); router.push('/'); };
 
-  const MenuItem = ({ href, icon: Icon, iconBg, label, sub }: {
-    href: string; icon: any; iconBg: string; label: string; sub?: string;
+  const MenuItem = ({ href, icon: Icon, iconBg, iconColor, label, sub }: {
+    href: string; icon: any; iconBg: string; iconColor?: string; label: string; sub?: string;
   }) => (
     <Link href={href}>
-      <Button variant="ghost" className="w-full justify-between h-14 px-4">
+      <Button variant="ghost" className="w-full justify-between h-14 px-4 hover:bg-secondary/80">
         <div className="flex items-center gap-3">
           <div className={`p-2 ${iconBg} rounded-lg`}>
-            <Icon className="h-5 w-5" />
+            <Icon className={`h-5 w-5 ${iconColor || 'text-foreground'}`} />
           </div>
           <div className="text-left">
-            <p className="font-medium">{label}</p>
+            <p className="font-medium text-foreground">{label}</p>
             {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
           </div>
         </div>
@@ -48,6 +47,8 @@ export function Header() {
       </Button>
     </Link>
   );
+
+  const hasSubscriptions = subscriptions.length > 0;
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-lg">
@@ -62,34 +63,34 @@ export function Header() {
           </Link>
 
           {/* Desktop nav */}
-          <nav className="hidden md:flex items-center gap-8">
-            {isAuthenticated && user?.role === 'user' && subscriptions.length > 0 ? (
-              // Subscribed user — show dashboard links
-              <>
-                <Link href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Dashboard</Link>
-                <Link href="/subscriptions" className="text-sm text-muted-foreground hover:text-foreground transition-colors">My Gyms</Link>
-                <Link href="/workout" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Workouts</Link>
-                <Link href="/diet" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Diet Plans</Link>
-              </>
-            ) : (
-              // New / guest user — show browse links
-              <>
-                <Link href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">All Gyms</Link>
-                <Link href="/map" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Map View</Link>
-                <Link href="/#featured" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Featured</Link>
-                {isAuthenticated && user?.role === 'user' && (
+          <nav className="hidden md:flex items-center gap-6">
+            {isAuthenticated && user?.role === 'user' ? (
+              hasSubscriptions ? (
+                // Subscribed user nav
+                <>
+                  <Link href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Dashboard</Link>
                   <Link href="/subscriptions" className="text-sm text-muted-foreground hover:text-foreground transition-colors">My Gyms</Link>
-                )}
-              </>
-            )}
-            {isAuthenticated && user?.role === 'admin' && <Link href="/admin" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Admin Dashboard</Link>}
-            {isAuthenticated && user?.role === 'owner' && <Link href="/owner" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Owner Dashboard</Link>}
-            {isAuthenticated && user?.role === 'trainer' && <Link href="/trainer" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Trainer Dashboard</Link>}
+                  <Link href="/gyms" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Explore Gyms</Link>
+                  <Link href="/workout" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Workouts</Link>
+                  <Link href="/diet" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Diet</Link>
+                </>
+              ) : (
+                // New user nav
+                <>
+                  <Link href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">All Gyms</Link>
+                  <Link href="/gyms" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Explore</Link>
+                  <Link href="/map" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Map View</Link>
+                </>
+              )
+            ) : null}
+            {isAuthenticated && user?.role === 'admin' && <Link href="/admin" className="text-sm text-muted-foreground hover:text-foreground">Admin Dashboard</Link>}
+            {isAuthenticated && user?.role === 'owner' && <Link href="/owner" className="text-sm text-muted-foreground hover:text-foreground">Owner Dashboard</Link>}
+            {isAuthenticated && user?.role === 'trainer' && <Link href="/trainer" className="text-sm text-muted-foreground hover:text-foreground">Trainer Dashboard</Link>}
           </nav>
 
           <div className="flex items-center gap-3">
 
-            {/* USER hamburger */}
+            {/* USER menu */}
             {isAuthenticated && user?.role === 'user' && (
               <>
                 <Link href="/wallet" className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-card rounded-lg border border-border/50">
@@ -108,13 +109,13 @@ export function Header() {
                       )}
                     </Button>
                   </SheetTrigger>
-                  <SheetContent side="right" className="w-[320px] sm:w-[400px] overflow-y-auto">
+                  <SheetContent side="right" className="w-[320px] sm:w-[380px] overflow-y-auto">
                     <SheetHeader>
                       <SheetTitle className="text-left">Menu</SheetTitle>
                     </SheetHeader>
 
-                    {/* User info card */}
-                    <div className="mt-6 flex items-center gap-3 p-4 bg-card rounded-xl border border-border/50">
+                    {/* User card */}
+                    <div className="mt-5 flex items-center gap-3 p-4 bg-card rounded-xl border border-border/50">
                       <img src={avatarSrc} alt={displayName} className="h-12 w-12 rounded-xl object-cover" />
                       <div>
                         <p className="font-semibold text-foreground">{displayName}</p>
@@ -129,31 +130,28 @@ export function Header() {
 
                     <Separator className="my-4" />
 
-                    {/* Account */}
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 mb-2">Account</p>
-                    <nav className="space-y-1">
+                    <nav className="space-y-0.5">
                       <MenuItem href="/profile" icon={User} iconBg="bg-secondary" label="My Profile" sub="View & edit your details" />
-                      <MenuItem href="/subscriptions" icon={Calendar} iconBg="bg-secondary" label="My Subscriptions" sub={`${subscriptions.length} active plan${subscriptions.length !== 1 ? 's' : ''}`} />
+                      <MenuItem href="/subscriptions" icon={Calendar} iconBg="bg-secondary" label="My Gyms" sub={`${subscriptions.length} active plan${subscriptions.length !== 1 ? 's' : ''}`} />
                       <MenuItem href="/subscriptions/bookings" icon={Users} iconBg="bg-secondary" label="Trainer Bookings" sub="Your booked sessions" />
-                      <MenuItem href="/wallet" icon={Wallet} iconBg="bg-primary/20" label="Wallet" sub={`Balance: ₹${walletBalance?.toFixed(2) || '0.00'}`} />
+                      <MenuItem href="/wallet" icon={Wallet} iconBg="bg-primary/20" iconColor="text-primary" label="Wallet" sub={`Balance: ₹${walletBalance?.toFixed(2) || '0.00'}`} />
                     </nav>
 
                     <Separator className="my-4" />
 
-                    {/* Fitness */}
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 mb-2">Fitness</p>
-                    <nav className="space-y-1">
-                      <MenuItem href="/workout" icon={Dumbbell} iconBg="bg-orange-500/20" label="Workout Plans" sub="Structured training programs" />
-                      <MenuItem href="/diet" icon={Utensils} iconBg="bg-green-500/20" label="Diet Plans" sub="Nutrition & meal guides" />
+                    <nav className="space-y-0.5">
+                      <MenuItem href="/workout" icon={Dumbbell} iconBg="bg-orange-500/20" iconColor="text-orange-500" label="Workout Plans" sub="Structured training programs" />
+                      <MenuItem href="/diet" icon={Utensils} iconBg="bg-green-500/20" iconColor="text-green-500" label="Diet Plans" sub="Nutrition & meal guides" />
                     </nav>
 
                     <Separator className="my-4" />
 
-                    {/* Explore */}
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 mb-2">Explore</p>
-                    <nav className="space-y-1">
-                      <MenuItem href="/" icon={Compass} iconBg="bg-blue-500/20" label="Explore Gyms" sub="Find new gyms near you" />
-                      <MenuItem href="/map" icon={Compass} iconBg="bg-blue-500/20" label="Map View" sub="Browse gyms on map" />
+                    <nav className="space-y-0.5">
+                      <MenuItem href="/gyms" icon={Compass} iconBg="bg-blue-500/20" iconColor="text-blue-500" label="Explore Gyms" sub="Find new gyms near you" />
+                      <MenuItem href="/map" icon={MapPin} iconBg="bg-blue-500/20" iconColor="text-blue-500" label="Map View" sub="Browse gyms on map" />
                     </nav>
 
                     <Separator className="my-4" />
@@ -166,15 +164,15 @@ export function Header() {
               </>
             )}
 
-            {/* ADMIN / OWNER / TRAINER hamburger */}
+            {/* ADMIN / OWNER / TRAINER */}
             {isAuthenticated && (user?.role === 'admin' || user?.role === 'owner' || user?.role === 'trainer') && (
               <Sheet>
                 <SheetTrigger asChild>
                   <Button variant="ghost" size="icon"><Menu className="h-6 w-6" /></Button>
                 </SheetTrigger>
-                <SheetContent side="right" className="w-[320px] sm:w-[400px]">
+                <SheetContent side="right" className="w-[320px] sm:w-[380px]">
                   <SheetHeader><SheetTitle className="text-left">Menu</SheetTitle></SheetHeader>
-                  <div className="mt-6 flex items-center gap-3 p-4 bg-card rounded-xl border border-border/50">
+                  <div className="mt-5 flex items-center gap-3 p-4 bg-card rounded-xl border border-border/50">
                     <img src={user?.avatar || "/placeholder.svg"} alt={user?.name} className="h-12 w-12 rounded-xl object-cover" />
                     <div>
                       <p className="font-semibold">{user?.name}</p>
@@ -183,16 +181,16 @@ export function Header() {
                   </div>
                   <Separator className="my-4" />
                   {user?.role === 'trainer' && (
-                    <nav className="space-y-1 mb-4">
-                      <MenuItem href="/trainer" icon={User} iconBg="bg-secondary" label="My Dashboard" sub="View stats and sessions" />
-                      <MenuItem href="/trainer/settings" icon={User} iconBg="bg-secondary" label="Profile Settings" sub="" />
-                      <MenuItem href="/trainer/clients" icon={Users} iconBg="bg-secondary" label="My Clients" sub="" />
+                    <nav className="space-y-0.5 mb-4">
+                      <MenuItem href="/trainer" icon={User} iconBg="bg-secondary" label="My Dashboard" />
+                      <MenuItem href="/trainer/settings" icon={User} iconBg="bg-secondary" label="Profile Settings" />
+                      <MenuItem href="/trainer/clients" icon={Users} iconBg="bg-secondary" label="My Clients" />
                     </nav>
                   )}
                   {user?.role === 'owner' && (
-                    <nav className="space-y-1 mb-4">
-                      <MenuItem href="/owner" icon={User} iconBg="bg-secondary" label="Owner Dashboard" sub="" />
-                      <MenuItem href="/owner/trainers" icon={Users} iconBg="bg-secondary" label="Manage Trainers" sub="" />
+                    <nav className="space-y-0.5 mb-4">
+                      <MenuItem href="/owner" icon={User} iconBg="bg-secondary" label="Owner Dashboard" />
+                      <MenuItem href="/owner/trainers" icon={Users} iconBg="bg-secondary" label="Manage Trainers" />
                     </nav>
                   )}
                   <Separator className="my-4" />
@@ -203,7 +201,6 @@ export function Header() {
               </Sheet>
             )}
 
-            {/* Not logged in */}
             {!isAuthenticated && (
               <div className="flex items-center gap-2">
                 <Link href="/login"><Button variant="ghost" className="text-sm">Login</Button></Link>
