@@ -70,7 +70,6 @@ export function Header() {
                 <>
                   <Link href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Dashboard</Link>
                   <Link href="/subscriptions" className="text-sm text-muted-foreground hover:text-foreground transition-colors">My Gyms</Link>
-                  <Link href="/gyms" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Explore Gyms</Link>
                   <Link href="/workout" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Workouts</Link>
                   <Link href="/diet" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Diet</Link>
                 </>
