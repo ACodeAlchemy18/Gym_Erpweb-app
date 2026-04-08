@@ -22,18 +22,27 @@ const OnboardingContext = createContext<OnboardingContextType | undefined>(undef
 
 // Fields that hold large base64 image data — strip these before saving to localStorage
 // but keep them alive in React state (in-memory only).
-const IMAGE_FIELDS = ['avatar', 'profilePhoto', 'image'];
+const IMAGE_FIELDS = ['avatar', 'profilePhoto', 'image','gymPhotos'];
 
 function stripImages(data: Record<string, any>): Record<string, any> {
   const stripped = { ...data };
+
   IMAGE_FIELDS.forEach(key => {
-    if (stripped[key] && typeof stripped[key] === 'string' && stripped[key].startsWith('data:')) {
+    if (!stripped[key]) return;
+
+    // 🔥 handle single image
+    if (typeof stripped[key] === 'string' && stripped[key].startsWith('data:')) {
+      delete stripped[key];
+    }
+
+    // 🔥 handle multiple images (IMPORTANT)
+    if (Array.isArray(stripped[key])) {
       delete stripped[key];
     }
   });
+
   return stripped;
 }
-
 function safeSave(key: string, value: string) {
   try {
     localStorage.setItem(key, value);

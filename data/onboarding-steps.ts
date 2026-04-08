@@ -13,7 +13,7 @@ export interface OnboardingField {
   label: string;
   type: 'text' | 'email' | 'number' | 'select' | 'date' | 'time' |
    'textarea' | 'multiselect' | 'image' | 'range' | 'weeklyAvailability' | 'list' |
-   'phone' | 'social' | 'location';
+   'phone' | 'social' | 'location'|'multiimage';
   placeholder?: string;
   required: boolean;
   options?: { value: string; label: string }[];
@@ -469,6 +469,7 @@ const OWNER_ONBOARDING_STEPS: OnboardingStep[] = [
       { name: 'gymArea', label: 'Gym Area (sq.ft)', type: 'range', required: true },
     ],
   },
+
   {
     id: 'gym_facilities',
     title: 'Facilities & Equipment',
@@ -479,6 +480,7 @@ const OWNER_ONBOARDING_STEPS: OnboardingStep[] = [
       { name: 'facilities', label: 'Additional Facilities', type: 'list', required: false },
     ],
   },
+
   {
     id: 'gym_operations',
     title: 'Operations',
@@ -491,6 +493,7 @@ const OWNER_ONBOARDING_STEPS: OnboardingStep[] = [
       { name: 'staffMembers', label: 'Total Staff Members', type: 'number', placeholder: '10', required: true },
     ],
   },
+
   {
     id: 'gym_pricing',
     title: 'Pricing & Services',
@@ -502,8 +505,23 @@ const OWNER_ONBOARDING_STEPS: OnboardingStep[] = [
       { name: 'serviceRadius', label: 'Service Radius (km)', type: 'range', required: true },
     ],
   },
-];
 
+  // 🔥 NEW STEP
+  {
+    id: 'gym_photos',
+    title: 'Gym Photos',
+    description: 'Upload photos of your gym',
+    icon: 'Image',
+    fields: [
+      {
+        name: 'gymPhotos',
+        label: 'Upload Gym Photos',
+        type: 'multiimage',
+        required: false,
+      }
+    ]
+  }
+];
 // ─────────────────────────────────────────────────────────────────
 // TRAINER ONBOARDING — unchanged from original
 // ─────────────────────────────────────────────────────────────────
