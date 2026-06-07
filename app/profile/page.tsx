@@ -75,6 +75,9 @@ export default function ProfilePage() {
 
   const onboarding = getOnboardingData(user.id);
   const od = onboarding?.data || {};
+  console.log("OD DATA:", od);
+console.log("GYM PHOTOS:", od.gymPhotos);
+
 
   // ── which field is currently being edited ───────────────────────────────
   const [editing, setEditing] = useState<string | null>(null);
@@ -136,6 +139,8 @@ export default function ProfilePage() {
     { key: 'facebook',  label: 'Facebook',  icon: Facebook,  color: 'text-blue-500', prefix: '' },
     { key: 'youtube',   label: 'YouTube',   icon: Youtube,   color: 'text-red-500',  prefix: '' },
     { key: 'website',   label: 'Website',   icon: Globe,     color: 'text-muted-foreground', prefix: '' },
+  ].filter(s => od[s.key]);
+ 
   ];
 
   // Handle avatar upload
@@ -210,6 +215,12 @@ export default function ProfilePage() {
                     <Camera className="h-3 w-3" />Click photo to change · Hover any field to edit
                   </p>
                 </div>
+
+               <Link href="/onboarding?edit=true">
+                  <Button variant="outline" size="sm" className="border-border bg-transparent gap-1.5 shrink-0">
+                    <Edit2 className="h-3.5 w-3.5" />Edit Profile
+                  </Button>
+                </Link>
               </div>
             </CardContent>
           </Card>
@@ -380,9 +391,37 @@ export default function ProfilePage() {
                       placeholder="Describe any injuries or pain areas..." className="bg-background border-border text-sm min-h-16 resize-none" autoFocus />
                   </EditRow>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
+          {/* ── GYM PHOTOS ── */}
+{user.role === 'owner' && od.gymPhotos?.length > 0 && (
+  <Card className="mb-6 border-border/50">
+    <CardHeader>
+      <CardTitle className="flex items-center gap-2 text-base">
+        <Dumbbell className="h-5 w-5 text-primary" />
+        Gym Photos
+      </CardTitle>
+    </CardHeader>
+
+    <CardContent>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        {od.gymPhotos.map((img: string, index: number) => (
+          <div
+            key={index}
+            className="rounded-xl overflow-hidden border border-border/50"
+          >
+            <img
+              src={img}
+              alt={`Gym ${index}`}
+              className="w-full h-32 object-cover hover:scale-105 transition"
+            />
+          </div>
+        ))}
+      </div>
+    </CardContent>
+  </Card>
+)}
 
           {/* ── FITNESS GOALS ── */}
           <Card className="mb-6 border-border/50">
@@ -495,6 +534,8 @@ export default function ProfilePage() {
           )}
         </div>
       </main>
+      
+
 
       <footer className="py-12 border-t border-border/50 mt-16">
         <div className="container mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">

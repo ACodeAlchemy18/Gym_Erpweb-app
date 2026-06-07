@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from '@/contexts/auth-context';
 import { useOnboarding } from '@/contexts/onboarding-context';
 import { getOnboardingSteps, getTotalSteps, type OnboardingField } from '@/data/onboarding-steps';
@@ -28,9 +30,22 @@ export default function OnboardingPage() {
   const { saveOnboardingData, completeOnboarding } = useOnboarding();
   const [listInputs, setListInputs] = useState<Record<string, string>>({});
   const [currentStep, setCurrentStep] = useState(0);
-  const [formData, setFormData] = useState<Record<string, any>>({});
+ 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const searchParams = useSearchParams();
+const isEditMode = searchParams.get("edit") === "true";
+const { getOnboardingData } = useOnboarding();
+const onboarding = getOnboardingData(user.id);
 
+const [formData, setFormData] = useState<Record<string, any>>(
+  isEditMode && onboarding?.data ? onboarding.data : {}
+);
+
+useEffect(() => {
+  if (isEditMode && onboarding?.data) {
+    setFormData(onboarding.data);
+  }
+}, [isEditMode, onboarding]);
   if (!isAuthenticated || !user) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -45,7 +60,7 @@ export default function OnboardingPage() {
       </div>
     );
   }
-
+  
   const steps = getOnboardingSteps(user.role);
   const totalSteps = getTotalSteps(user.role);
   const currentStepData = steps[currentStep];
@@ -60,6 +75,9 @@ export default function OnboardingPage() {
     };
     return icons[iconName] || '•';
   };
+  
+
+
 
   const handleFieldChange = (fieldName: string, value: any) => {
     setFormData(prev => ({ ...prev, [fieldName]: value }));
@@ -86,16 +104,21 @@ export default function OnboardingPage() {
   const handleNext = () => { if (validateCurrentStep() && currentStep < steps.length - 1) setCurrentStep(s => s + 1); };
   const handlePrevious = () => { if (currentStep > 0) setCurrentStep(s => s - 1); };
   const handleComplete = () => {
-    if (validateCurrentStep()) {
-      saveOnboardingData(user.id, user.role, formData);
-      completeOnboarding(user.id);
-      router.push('/profile');
-    }
-  };
+  if (validateCurrentStep()) {
+    saveOnboardingData(user.id, user.role, formData);
 
+    if (!isEditMode) {
+      completeOnboarding(user.id);
+    }
+
+    router.push('/profile');
+  }
+};
   // ── FIELD RENDERER ─────────────────────────────────────────────
   const renderField = (field: OnboardingField) => {
-    const value = formData[field.name] || (field.type === 'multiselect' ? [] : '');
+   const value =
+  formData[field.name] ??
+  (field.type === 'multiselect' || field.type === 'multiimage' ? [] : '');
     const error = errors[field.name];
 
     switch (field.type) {
@@ -205,6 +228,61 @@ export default function OnboardingPage() {
             {field.help && <p className="text-xs text-muted-foreground">{field.help}</p>}
           </div>
         );
+        //gym_image
+        case 'multiimage':
+  return (
+    <div key={field.name} className="space-y-3">
+      <Label className="text-sm font-medium">{field.label}</Label>
+
+      {/* Preview */}
+      <div className="flex flex-wrap gap-3">
+        {(value || []).map((img: string, idx: number) => (
+          <div key={idx} className="relative">
+            <img
+              src={img}
+              className="h-24 w-24 object-cover rounded-lg border"
+            />
+            <button
+              type="button"
+              onClick={() =>
+                handleFieldChange(
+                  field.name,
+                  (value || []).filter((_: any, i: number) => i !== idx)
+                )
+              }
+              className="absolute top-1 right-1 bg-black/60 text-white rounded-full px-1 text-xs"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* Upload */}
+      <label className="inline-flex items-center gap-2 px-4 py-2 border rounded-lg cursor-pointer bg-secondary">
+        Add Photos
+        <input
+          type="file"
+          multiple
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const files = Array.from(e.target.files || []);
+            files.forEach((file) => {
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                handleFieldChange(field.name, [
+                  ...(value || []),
+                  reader.result,
+                ]);
+              };
+              reader.readAsDataURL(file);
+            });
+          }}
+        />
+      </label>
+    </div>
+  );
 
       // ── TEXTAREA ──────────────────────────────────────────────
       case 'textarea':
@@ -461,8 +539,10 @@ export default function OnboardingPage() {
           {/* Progress */}
           <div className="mb-8">
             <div className="flex justify-between items-center mb-3">
-              <h1 className="text-3xl font-bold text-foreground">Complete Your Profile</h1>
-            </div>
+              <h1 className="text-3xl font-bold text-foreground">
+  {isEditMode ? "Edit Your Profile" : "Complete Your Profile"}
+</h1>
+</div>
             <Progress value={progress} className="h-2" />
           </div>
 
